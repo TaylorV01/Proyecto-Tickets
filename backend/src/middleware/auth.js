@@ -1,33 +1,29 @@
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'secreto_super_seguro';
 
-const auth = (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ message: 'Token no proporcionado' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_jwt');
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ message: 'Token inválido' });
+// Middleware de autenticación y autorización por rol
+function authorize(roles = []) {
+  // roles puede ser un string o un array
+  if (typeof roles === 'string') {
+    roles = [roles];
   }
-};
-
-const authorize = (roles) => {
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Usuario no autenticado' });
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Token no proporcionado' });
     }
-
-    if (!roles.includes(req.user.rol)) {
-      return res.status(403).json({ message: 'Acceso denegado' });
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+      if (roles.length && !roles.includes(decoded.rol)) {
+        return res.status(403).json({ error: 'Acceso denegado: rol insuficiente' });
+      }
+      next();
+    } catch (err) {
+      res.status(401).json({ error: 'Token inválido' });
     }
-
-    next();
   };
-};
+}
 
-module.exports = { auth, authorize }; 
+module.exports = authorize; 
